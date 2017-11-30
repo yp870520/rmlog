@@ -1,0 +1,87 @@
+#!/bin/bash
+## author: Pandora aceyu ##
+
+config_path="./rmlog.ini"
+
+key_list=()
+value_list=()
+declare -A item_dict
+
+for line in $(cat $config_path | grep -v "^#" | grep "=")
+do	
+	con_key=$(echo $line | awk -F '=' '{print $1}')
+	if [ -n $con_key ];then
+		key_list=(${key_list[*]} $con_key)
+	fi
+	con_value=$(echo $line | awk -F '=' '{print $2}')
+	if [ -n $con_value ];then
+		value_list=(${value_list[*]} $con_value)
+	fi
+	item_dict[$con_key]=$con_value
+	
+done
+
+if [ ${#key_list[@]} -ne ${#value_list[@]} ]; then
+    echo "Please check the config file, date is incomplete"
+    exit 1
+else 
+    num=$[${#key_list[@]}-1]
+fi
+
+funcpath=$(echo ${item_dict[logpath]} | cut -d '"' -f 2)
+funcname=$(echo ${item_dict[logname]} | cut -d '"' -f 2)
+
+function rmlog()
+{
+	for i in $(echo $funcpath | awk -F ',' '{for(i=1;i<=NF;i++){print $i}}')
+	do
+		find $i -mindepth 1 -ctime +${item_dict[savedatenum]} -name "$funcname" -exec rm -rf {} \;
+	done
+}
+
+function cleanlog()
+{
+	for i in $(echo $funcpath | awk -F ',' '{for(i=1;i<=NF;i++){print $i}}')
+	do
+		for s in $(ls $i/$funcname)
+		do
+			> $s
+		done
+	done
+}
+
+
+function main()
+{
+	while true
+	do
+		if [ ${item_dict[rmswitch]} -eq 1 ];then
+			rmlog
+			sleep ${item_dict[crontime]}h
+		else
+			cleanlog
+			sleep ${item_dict[crontime]}h
+		fi
+	done			
+}
+
+
+case $1 in
+	start)
+	main &
+	;;
+	stop)
+	kill $(ps axu | grep "rmlogV1 start"| grep -v "grep"|awk '{print $2}')
+	;;
+	*)
+	cat <<EOF
+---------使用方法---------
+第一步：按照config中的提示修改对应值
+第二步：以参数方式启动脚本，useage:$0 start|stop
+注意：不要修改执行脚本的名称
+--------------------------
+EOF
+
+	;;
+esac
+
